@@ -33,25 +33,5 @@ void init_logging() {
 //  logging::core::get()->add_global_attribute("File", logging::attributes::mutable_constant<std::string>(""));
 //  logging::core::get()->add_global_attribute("Function", logging::attributes::mutable_constant<std::string>(""));
 
-  logging::add_common_attributes();
 
-  logging::register_simple_filter_factory<logging::trivial::severity_level, char>("Severity");
-  logging::register_simple_formatter_factory<logging::trivial::severity_level, char>("Severity");
-
-  auto syslog_format(logging::expressions::stream
-                         << "["
-                         << logging::expressions::format_date_time<boost::posix_time::ptime>(
-                             "TimeStamp",
-                             "%Y-%m-%d %H:%M:%S") << "] ["
-                         << logging::trivial::severity << "] ["
-                         << logging::expressions::attr<std::string>("Filename") << ":"
-                         << logging::expressions::attr<std::string>("Function") << ":"
-                         << logging::expressions::attr<int>("Line") << "] "
-                         << logging::expressions::smessage
-  );
-
-  logging::add_console_log(std::cout, logging::keywords::format = syslog_format);
-
-  logging::add_file_log(logging::keywords::file_name  = "sys_%d_%m_%Y.%N.log",
-                        logging::keywords::format = syslog_format);
 }

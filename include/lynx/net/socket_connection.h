@@ -16,34 +16,33 @@
 
 namespace lynx::net {
 
-class socket_connection;
-
-using message_type = std::string;
-
 class socket_connection : public std::enable_shared_from_this<socket_connection> {
+  using io_context_type = boost::asio::io_context;
+  using socket_type = boost::asio::ip::tcp::socket;
+  using endpoints_sequence_type = boost::asio::ip::tcp::resolver::results_type;
+  using endpoint_type = boost::asio::ip::tcp::endpoint;
+
  public:
   using my_owned_message_type = owned_message_type<socket_connection>;
 
-  socket_connection(boost::asio::io_context& context,
-                    boost::asio::ip::tcp::socket socket,
+  socket_connection(io_context_type& context,
+                    socket_type socket,
                     std::queue<my_owned_message_type>& messages_in)
       : context_(context), socket_(std::move(socket)), messages_in_(messages_in), id_(-1) {}
 
   ~socket_connection() = default;
 
-  void connect_to_server(const boost::asio::ip::tcp::resolver::results_type& endpoints) {
-    // Request asio attempts to connect to an endpoint
-
+  void connect_to_server(const endpoints_sequence_type& endpoints) {
     if (socket_.is_open()) {
       LOG(debug) << "connect_to_server: socket is open";
     }
-
     boost::asio::async_connect(socket_, endpoints,
-                               [this](std::error_code ec, const boost::asio::ip::tcp::endpoint& endpoint) {
+                               [this](std::error_code ec, const endpoint_type& endpoint) {
                                  if (!ec) {
                                    LOG(debug) << "connect_to_server: Start message reading: " << id_;
-                                   LOG(debug) << "connect_to_server: Start message reading address: " << endpoint.address().to_string()
-                                    << " and port: " << endpoint.port();
+                                   LOG(debug) << "connect_to_server: Start message reading address: "
+                                              << endpoint.address().to_string()
+                                              << " and port: " << endpoint.port();
 
                                    read_message();
                                  } else {
@@ -119,12 +118,10 @@ class socket_connection : public std::enable_shared_from_this<socket_connection>
                                   [this](std::error_code ec, std::size_t length) {
                                     if (!ec) {
                                       add_incoming_message(length);
-
                                     } else {
                                       LOG(debug) << "Read body fail for: " << id_ << " with: " << ec.message();
                                       boost::system::error_code err;
                                       socket_.close(err);
-                                      //read_message();
                                     }
                                   });
   }
@@ -132,21 +129,18 @@ class socket_connection : public std::enable_shared_from_this<socket_connection>
   void add_incoming_message(std::size_t length) {
     auto message = string_buffer_.substr(0, length);
     LOG(debug) << "Adding incoming message: " << id_ << ", message: " << message;
-    messages_in_.push(std::make_pair(weak_from_this().lock(), std::move(message)));
+    messages_in_.push(std::make_pair(shared_from_this(), std::move(message)));
     boost::asio::dynamic_buffer(string_buffer_).consume(length);
     read_message();
   }
 
   std::function<void(std::shared_ptr<socket_connection>)> on_accepted_;
 
-  boost::asio::ip::tcp::socket socket_;
-
-  boost::asio::io_context& context_;
+  socket_type socket_;
+  io_context_type& context_;
   std::queue<message_type> messages_out_;
   std::queue<my_owned_message_type>& messages_in_;
-
   std::string string_buffer_;
-
   std::uint32_t id_;
 };
 
